@@ -35,8 +35,8 @@ initialize_json_file(USERS_FILE)
 initialize_json_file(FAVORITES_FILE)
 
 # Ustawienia Spotify API
-SPOTIFY_CLIENT_ID = 'TWOJ_CLIENT_ID'  # Wstaw swój Client ID
-SPOTIFY_CLIENT_SECRET = 'TWOJ_CLIENT_SECRET'  # Wstaw swój Client Secret
+SPOTIFY_CLIENT_ID = '3df3f84da658417d84522a7a345c524b'  # Wstaw swój Client ID
+SPOTIFY_CLIENT_SECRET = '657f4e038bf94a718343256b7706e6e8'  # Wstaw swój Client Secret
 sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET))
 
 # Stały limit pobierania
