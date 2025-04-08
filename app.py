@@ -7,6 +7,7 @@ import requests
 from flask import Flask, render_template, jsonify, request, send_from_directory, redirect, url_for, session
 from mutagen import File
 from PIL import Image
+import mutagen.opus
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 
@@ -376,5 +377,6 @@ if __name__ == '__main__':
     app.run(debug=True)
 else:
     # Dla Render
-    if __name__ == '__main__':
-    app.run(debug=True)
+    import os
+    port = int(os.getenv("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
