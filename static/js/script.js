@@ -56,7 +56,7 @@ function playTrack(index) {
     const duration = document.getElementById('duration');
 
     audioPlayer.src = `/music/${track.filename}`;
-    playerCover.src = `/static/covers/${track.cover}`;
+    playerCover.src = track.cover ? `/static/covers/${track.cover}` : `/static/covers/default_cover.jpg`;
     playerTitle.textContent = track.title;
     playerArtist.textContent = track.artist;
     audioPlayer.play();
@@ -187,39 +187,11 @@ function downloadTrack(filename) {
 }
 
 function addFavorite(filename) {
-    fetch('/add_favorite', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ filename: filename })
-    })
-    .then(response => response.json())
-    .then(data => {
-        alert(data.message);
-        window.location.reload();
-    })
-    .catch(error => {
-        alert('Error adding to favorites: ' + error);
-    });
+    window.location.href = `/favorite/add/${filename}`;
 }
 
 function removeFavorite(filename) {
-    fetch('/remove_favorite', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ filename: filename })
-    })
-    .then(response => response.json())
-    .then(data => {
-        alert(data.message);
-        window.location.reload();
-    })
-    .catch(error => {
-        alert('Error removing from favorites: ' + error);
-    });
+    window.location.href = `/favorite/remove/${filename}`;
 }
 
 function renderTrackList() {
@@ -229,7 +201,7 @@ function renderTrackList() {
         const trackCard = `
             <div class="col-md-4 col-lg-3 mb-4 track-item" data-title="${track.title.toLowerCase()}" data-artist="${track.artist.toLowerCase()}">
                 <div class="card track-card">
-                    <img src="/static/covers/${track.cover}" class="card-img-top rounded-top" alt="Album Cover">
+                    <img src="${track.cover ? `/static/covers/${track.cover}` : `/static/covers/default_cover.jpg`}" class="card-img-top rounded-top" alt="Album Cover">
                     <div class="card-body">
                         <h5 class="card-title text-light">${track.title}</h5>
                         <p class="card-text text-muted">${track.artist}</p>

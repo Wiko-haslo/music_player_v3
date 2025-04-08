@@ -2,7 +2,7 @@ import os
 import json
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_from_directory
 from PIL import Image
 import requests
 from io import BytesIO
@@ -131,18 +131,24 @@ def load_songs():
     for filename in os.listdir(MUSIC_FOLDER):
         print(f"Found file: {filename}")  # Debug
         if filename.endswith(".opus"):
-            cover_path = os.path.join(COVERS_FOLDER, f"{filename[:-5]}.jpg")
-            print(f"Checking cover at: {cover_path}")  # Debug
-            if not os.path.exists(cover_path):
-                print(f"Cover not found for {filename}")  # Debug
-                cover_path = None
+            # Rozdziel nazwę pliku na artystę i tytuł
+            base_name = filename[:-5]  # Usuń ".opus"
+            parts = base_name.split(" - ")
+            artist = parts[0] if len(parts) > 1 else "Unknown Artist"
+            song_title = parts[1] if len(parts) > 1 else base_name
+
+            # Sprawdź, czy istnieje okładka
+            cover_filename = f"{base_name}.jpg"
+            cover_path = cover_filename if os.path.exists(os.path.join(COVERS_FOLDER, cover_filename)) else None
+
             songs.append({
                 "filename": filename,
-                "title": filename[:-5],
+                "title": song_title,
+                "artist": artist,
                 "duration": 0,  # Pomijamy duration, bo nie używamy mutagen
-                "cover": cover_path
+                "cover": cover_filename  # Zwracamy nazwę pliku okładki (bez ścieżki)
             })
-            print(f"Loaded song: {filename}")  # Debug
+            print(f"Loaded song: {filename}, Artist: {artist}, Title: {song_title}, Cover: {cover_filename}")  # Debug
     print(f"Total songs loaded: {len(songs)}")  # Debug
     return songs
 
@@ -172,21 +178,12 @@ def register():
     return render_template("login.html")
 
 # Strona główna
-@app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["GET"])
 def index():
     if "username" not in session:
         return redirect(url_for("login"))
-
-    if request.method == "POST":
-        playlist_url = request.form.get("playlist_url")
-        if playlist_url:
-            download_playlist(playlist_url)
-            flash("Playlist downloaded successfully!", "success")
-            return redirect(url_for("index"))
-
-    # Wczytaj listę utworów
-    songs = load_songs()
-    return render_template("index.html", songs=songs)
+    
+    return render_template("index.html")
 
 # Strona ulubionych
 @app.route("/favorites")
@@ -209,17 +206,24 @@ def favorites():
         file_path = os.path.join(MUSIC_FOLDER, filename)
         print(f"Checking favorite file: {file_path}")  # Debug
         if os.path.exists(file_path):
-            cover_path = os.path.join(COVERS_FOLDER, f"{filename[:-5]}.jpg")
-            if not os.path.exists(cover_path):
-                print(f"Cover not found for favorite {filename}")  # Debug
-                cover_path = None
+            # Rozdziel nazwę pliku na artystę i tytuł
+            base_name = filename[:-5]  # Usuń ".opus"
+            parts = base_name.split(" - ")
+            artist = parts[0] if len(parts) > 1 else "Unknown Artist"
+            song_title = parts[1] if len(parts) > 1 else base_name
+
+            # Sprawdź, czy istnieje okładka
+            cover_filename = f"{base_name}.jpg"
+            cover_path = cover_filename if os.path.exists(os.path.join(COVERS_FOLDER, cover_filename)) else None
+
             songs.append({
                 "filename": filename,
-                "title": filename[:-5],
+                "title": song_title,
+                "artist": artist,
                 "duration": 0,  # Pomijamy duration
-                "cover": cover_path
+                "cover": cover_filename
             })
-            print(f"Loaded favorite song: {filename}")  # Debug
+            print(f"Loaded favorite song: {filename}, Artist: {artist}, Title: {song_title}, Cover: {cover_filename}")  # Debug
 
     print(f"Total favorite songs loaded: {len(songs)}")  # Debug
     return render_template("favorites.html", songs=songs)
@@ -244,10 +248,33 @@ def logout():
     flash("Logged out successfully!", "success")
     return redirect(url_for("login"))
 
-# Strona z ulubionymi (opcjonalna, jeśli masz osobny endpoint)
-@app.route("/favorites_page")
-def favorites_page():
-    return redirect(url_for("favorites"))
+# Endpoint do pobierania listy utworów w formacie JSON
+@app.route("/get_music", methods=["GET"])
+def get_music():
+    if "username" not in session:
+        return redirect(url_for("login"))
+    
+    songs = load_songs()
+    return jsonify(songs)
+
+# Endpoint do pobierania playlisty
+@app.route("/download_playlist", methods=["POST"])
+def download_playlist_endpoint():
+    if "username" not in session:
+        return redirect(url_for("login"))
+
+    data = request.get_json()
+    playlist_url = data.get("url") if data else None
+    if not playlist_url:
+        return jsonify({"status": "error", "message": "Please provide a playlist URL"}), 400
+
+    download_playlist(playlist_url)
+    return jsonify({"status": "success", "message": "Playlist downloaded successfully!"})
+
+# Endpoint do pobierania utworu
+@app.route("/download_track/<filename>")
+def download_track(filename):
+    return send_from_directory(MUSIC_FOLDER, filename, as_attachment=True)
 
 # Uruchom aplikację tylko lokalnie
 if __name__ == '__main__':

@@ -6,21 +6,41 @@
 <div class="container-fluid py-4">
     <h3 class="text-light mb-3"><i class="fas fa-heart me-2"></i>Favorite Tracks</h3>
     <div class="row">
-        {% for track in music_files %}
+        {% for track in songs %}
         <div class="col-md-4 col-lg-3 mb-4">
             <div class="card bg-dark text-light shadow-lg track-card">
-                <img src="{{ url_for('static', filename='covers/' + track.cover) }}" class="card-img-top rounded-top" alt="Album Cover">
+                <img src="{{ track.cover | default('/static/covers/default_cover.jpg') }}" class="card-img-top rounded-top" alt="Album Cover">
                 <div class="card-body">
                     <h5 class="card-title text-light">{{ track.title }}</h5>
                     <p class="card-text text-muted">{{ track.artist }}</p>
                     <div class="d-flex justify-content-between">
-                        <button class="btn btn-primary btn-sm" onclick="playTrack('{{ track.filename }}', '{{ track.cover }}', '{{ track.title }}', '{{ track.artist }}')"><i class="fas fa-play me-1"></i>Play</button>
+                        <button class="btn btn-primary btn-sm" onclick="playTrackFromFavorites('{{ track.filename }}', '{{ track.cover }}', '{{ track.title }}', '{{ track.artist }}')"><i class="fas fa-play me-1"></i>Play</button>
                         <button class="btn btn-danger btn-sm" onclick="removeFavorite('{{ track.filename }}')"><i class="fas fa-heart-broken me-1"></i>Remove</button>
                     </div>
                 </div>
             </div>
         </div>
+        {% else %}
+        <p class="text-muted">No favorite songs.</p>
         {% endfor %}
     </div>
 </div>
+
+<script>
+function playTrackFromFavorites(filename, cover, title, artist) {
+    // Znajdź indeks utworu w trackList
+    const index = trackList.findIndex(track => track.filename === filename);
+    if (index !== -1) {
+        playTrack(index);
+    } else {
+        // Jeśli utwór nie jest w trackList, dodaj go tymczasowo
+        trackList.push({ filename, cover, title, artist, duration: 0 });
+        playTrack(trackList.length - 1);
+    }
+}
+
+function removeFavorite(filename) {
+    window.location.href = `/favorite/remove/${filename}`;
+}
+</script>
 {% endblock %}
