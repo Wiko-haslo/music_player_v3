@@ -35,8 +35,8 @@ initialize_json_file(USERS_FILE)
 initialize_json_file(FAVORITES_FILE)
 
 # Ustawienia Spotify API
-SPOTIFY_CLIENT_ID = '3df3f84da658417d84522a7a345c524b'  # Wstaw swój Client ID
-SPOTIFY_CLIENT_SECRET = '657f4e038bf94a718343256b7706e6e8'  # Wstaw swój Client Secret
+SPOTIFY_CLIENT_ID = 'TWOJ_CLIENT_ID'  # Wstaw swój Client ID
+SPOTIFY_CLIENT_SECRET = 'TWOJ_CLIENT_SECRET'  # Wstaw swój Client Secret
 sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET))
 
 # Stały limit pobierania
@@ -309,18 +309,6 @@ def download_playlist():
         print(f"Exception in download_playlist: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-# Endpoint do pobierania pojedynczego utworu przez użytkownika
-@app.route('/download_track/<filename>')
-def download_track(filename):
-    if 'username' not in session:
-        return jsonify({'status': 'error', 'message': 'Not logged in'}), 401
-
-    file_path = os.path.join(MUSIC_FOLDER, filename)
-    if not os.path.exists(file_path):
-        return jsonify({'status': 'error', 'message': 'File not found'}), 404
-
-    return send_from_directory(MUSIC_FOLDER, filename, as_attachment=True)
-
 # Endpoint do dodawania do polubionych
 @app.route('/add_favorite', methods=['POST'])
 def add_favorite():
@@ -375,7 +363,19 @@ def remove_favorite():
 # Endpoint do serwowania plików muzycznych
 @app.route('/music/<filename>')
 def serve_music(filename):
+    file_path = os.path.join(MUSIC_FOLDER, filename)
+    if not os.path.exists(file_path):
+        print(f"File not found: {file_path}")
+        return jsonify({'status': 'error', 'message': 'File not found'}), 404
+    print(f"Serving file: {file_path}")
     return send_from_directory(MUSIC_FOLDER, filename)
 
+# Uruchomienie aplikacji
 if __name__ == '__main__':
+    # Dla lokalnego uruchamiania
     app.run(debug=True)
+else:
+    # Dla Render
+    import os
+    port = int(os.getenv("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
