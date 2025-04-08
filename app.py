@@ -3,7 +3,6 @@ import json
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from flask import Flask, render_template, request, redirect, url_for, flash, session
-from mutagen.opus import OpusFile  # Używamy mutagen.opus do obsługi plików .opus
 from PIL import Image
 import requests
 from io import BytesIO
