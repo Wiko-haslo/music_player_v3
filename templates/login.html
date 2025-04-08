@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Music Player</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="gradient-bg">
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-4">
+                <div class="card shadow-lg p-4 bg-dark text-light">
+                    <h1 class="text-center mb-4"><i class="fas fa-music me-2"></i>Music Player</h1>
+                    <h2 class="text-center mb-3">Login</h2>
+                    {% if error %}
+                        <div class="alert alert-danger">{{ error }}</div>
+                    {% endif %}
+                    <form method="POST" action="{{ url_for('login') }}">
+                        <div class="mb-3">
+                            <label for="username" class="form-label"><i class="fas fa-user me-2"></i>Username</label>
+                            <input type="text" class="form-control bg-secondary text-light border-0" id="username" name="username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label"><i class="fas fa-lock me-2"></i>Password</label>
+                            <input type="password" class="form-control bg-secondary text-light border-0" id="password" name="password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100"><i class="fas fa-sign-in-alt me-2"></i>Login</button>
+                    </form>
+                    <hr class="my-4">
+                    <h2 class="text-center mb-3">Register</h2>
+                    <form method="POST" action="{{ url_for('register') }}">
+                        <div class="mb-3">
+                            <label for="username" class="form-label"><i class="fas fa-user me-2"></i>Username</label>
+                            <input type="text" class="form-control bg-secondary text-light border-0" id="username" name="username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label"><i class="fas fa-lock me-2"></i>Password</label>
+                            <input type="password" class="form-control bg-secondary text-light border-0" id="password" name="password" required>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100"><i class="fas fa-user-plus me-2"></i>Register</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

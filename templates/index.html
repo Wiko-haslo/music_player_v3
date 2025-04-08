@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Sekcja pobierania playlisty -->
+    <div class="download-playlist mb-4">
+        <h4 class="text-light"><i class="fas fa-download me-2"></i>Download Playlist</h4>
+        <div class="input-group">
+            <input type="text" id="playlist-url" class="form-control" placeholder="Spotify Playlist URL">
+            <button class="btn btn-success" onclick="downloadPlaylist()"><i class="fas fa-download me-1"></i>Download</button>
+        </div>
+        <p id="download-message" class="text-light mt-2" style="display: none;"></p>
+    </div>
+
+    <!-- Wyszukiwanie -->
+    <div class="search-tracks mb-4">
+        <h4 class="text-light"><i class="fas fa-search me-2"></i>Search Tracks</h4>
+        <input type="text" id="search-input" class="form-control" placeholder="Search by title or artist...">
+    </div>
+
+    <!-- Lista utworów -->
+    <div class="track-list">
+        <h4 class="text-light"><i class="fas fa-list me-2"></i>Track List</h4>
+        <div class="row" id="track-list">
+            <!-- Utwory będą renderowane przez JavaScript -->
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,6 @@
+flask
+mutagen
+pillow
+spotdl
+spotipy
+requests
