@@ -1,6 +1,6 @@
-flask
-mutagen
-pillow
-spotdl
-spotipy
-requests
+flask==3.0.3
+spotipy==2.24.0
+mutagen==1.47.0
+Pillow==10.4.0
+requests==2.32.3
+gunicorn==23.0.0
