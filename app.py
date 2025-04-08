@@ -7,7 +7,6 @@ import requests
 from flask import Flask, render_template, jsonify, request, send_from_directory, redirect, url_for, session
 from mutagen import File
 from PIL import Image
-import mutagen.opus
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 
