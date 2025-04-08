@@ -64,25 +64,40 @@ def download_cover(url, filename):
 # Funkcja do pobierania playlisty Spotify w formacie .opus
 def download_playlist(playlist_url):
     try:
+        print(f"Starting playlist download: {playlist_url}")  # Debug
         playlist_id = playlist_url.split("/")[-1].split("?")[0]
+        print(f"Extracted playlist ID: {playlist_id}")  # Debug
         results = sp.playlist_tracks(playlist_id)
         tracks = results["items"]
+        print(f"Found {len(tracks)} tracks in playlist")  # Debug
 
         for item in tracks:
             track = item["track"]
             track_name = track["name"]
             artist_name = track["artists"][0]["name"]
             album_cover_url = track["album"]["images"][0]["url"] if track["album"]["images"] else None
-            filename = f"{artist_name} - {track_name}.opus"  # Zmieniamy na .opus
+            filename = f"{artist_name} - {track_name}.opus"
+            print(f"Processing track: {filename}")  # Debug
 
             # Pobierz okładkę, jeśli istnieje
             if album_cover_url:
                 cover_filename = f"{artist_name} - {track_name}.jpg"
+                print(f"Downloading cover: {cover_filename}")  # Debug
                 download_cover(album_cover_url, cover_filename)
+            else:
+                print("No album cover available")  # Debug
 
             # Pobierz utwór w formacie .opus
-            os.system(f"spotdl '{track_name} {artist_name}' --format opus --output {MUSIC_FOLDER}/{filename}")
+            command = f"spotdl '{track_name} {artist_name}' --format opus --output \"{MUSIC_FOLDER}/{filename}\""
+            print(f"Running command: {command}")  # Debug
+            result = os.system(command)
+            if result == 0:
+                print(f"Successfully downloaded: {filename}")  # Debug
+            else:
+                print(f"Failed to download: {filename}, spotdl exit code: {result}")  # Debug
+                flash(f"Failed to download {filename}", "error")
     except Exception as e:
+        print(f"Error downloading playlist: {str(e)}")  # Debug
         flash(f"Error downloading playlist: {str(e)}", "error")
 
 # Funkcja do zarządzania ulubionymi
@@ -105,25 +120,30 @@ def manage_favorite(username, filename, action):
     with open(favorites_file, "w") as f:
         json.dump(favorites, f)
 
-# Funkcja do wczytywania utworów
+# Funkcja do wczytywania utworów (bez mutagen.opus)
 def load_songs():
     songs = []
+    print(f"Looking for songs in folder: {MUSIC_FOLDER}")  # Debug
+    if not os.path.exists(MUSIC_FOLDER):
+        print(f"Music folder {MUSIC_FOLDER} does not exist!")
+        return songs
+
     for filename in os.listdir(MUSIC_FOLDER):
-        if filename.endswith(".opus"):  # Zmieniamy na .opus
-            file_path = os.path.join(MUSIC_FOLDER, filename)
-            try:
-                audio = OpusFile(file_path)
-                cover_path = os.path.join(COVERS_FOLDER, f"{filename[:-5]}.jpg")  # .opus ma 5 znaków
-                if not os.path.exists(cover_path):
-                    cover_path = None
-                songs.append({
-                    "filename": filename,
-                    "title": filename[:-5],  # Usuwamy .opus z nazwy
-                    "duration": audio.info.length,
-                    "cover": cover_path
-                })
-            except Exception as e:
-                print(f"Error loading {filename}: {str(e)}")
+        print(f"Found file: {filename}")  # Debug
+        if filename.endswith(".opus"):
+            cover_path = os.path.join(COVERS_FOLDER, f"{filename[:-5]}.jpg")
+            print(f"Checking cover at: {cover_path}")  # Debug
+            if not os.path.exists(cover_path):
+                print(f"Cover not found for {filename}")  # Debug
+                cover_path = None
+            songs.append({
+                "filename": filename,
+                "title": filename[:-5],
+                "duration": 0,  # Pomijamy duration, bo nie używamy mutagen
+                "cover": cover_path
+            })
+            print(f"Loaded song: {filename}")  # Debug
+    print(f"Total songs loaded: {len(songs)}")  # Debug
     return songs
 
 # Strona logowania
@@ -179,27 +199,29 @@ def favorites():
         with open(favorites_file, "r") as f:
             favorites = json.load(f)
         user_favorites = favorites.get(session["username"], [])
+        print(f"User favorites for {session['username']}: {user_favorites}")  # Debug
     except (FileNotFoundError, json.JSONDecodeError):
         user_favorites = []
+        print("Favorites file not found or empty")  # Debug
 
     songs = []
     for filename in user_favorites:
         file_path = os.path.join(MUSIC_FOLDER, filename)
+        print(f"Checking favorite file: {file_path}")  # Debug
         if os.path.exists(file_path):
-            try:
-                audio = OpusFile(file_path)
-                cover_path = os.path.join(COVERS_FOLDER, f"{filename[:-5]}.jpg")
-                if not os.path.exists(cover_path):
-                    cover_path = None
-                songs.append({
-                    "filename": filename,
-                    "title": filename[:-5],
-                    "duration": audio.info.length,
-                    "cover": cover_path
-                })
-            except Exception as e:
-                print(f"Error loading favorite {filename}: {str(e)}")
+            cover_path = os.path.join(COVERS_FOLDER, f"{filename[:-5]}.jpg")
+            if not os.path.exists(cover_path):
+                print(f"Cover not found for favorite {filename}")  # Debug
+                cover_path = None
+            songs.append({
+                "filename": filename,
+                "title": filename[:-5],
+                "duration": 0,  # Pomijamy duration
+                "cover": cover_path
+            })
+            print(f"Loaded favorite song: {filename}")  # Debug
 
+    print(f"Total favorite songs loaded: {len(songs)}")  # Debug
     return render_template("favorites.html", songs=songs)
 
 # Dodaj/usuń z ulubionych
