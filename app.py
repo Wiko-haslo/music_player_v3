@@ -5,7 +5,7 @@ from spotipy.oauth2 import SpotifyClientCredentials
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, Response
 from PIL import Image
 import requests
-from io import BytesIO, io
+from io import BytesIO
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
