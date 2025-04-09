@@ -74,9 +74,13 @@ def find_file_on_drive(file_name, folder_id):
     return files[0]['id'] if files else None
 
 # Konfiguracja Spotify API
-SPOTIFY_CLIENT_ID = os.getenv("SPOTIPY_CLIENT_ID")
-SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET")
-sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET))
+# Odczytaj zmienne środowiskowe
+SPOTIPY_CLIENT_ID = os.getenv("SPOTIPY_CLIENT_ID")
+SPOTIPY_CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET")
+SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
+
+if not all([SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET, SERVICE_ACCOUNT_JSON]):
+    raise ValueError("Missing required environment variables: SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET, or SERVICE_ACCOUNT_JSON")
 
 # Funkcja do zapisu danych użytkownika
 def save_user(username, password):
