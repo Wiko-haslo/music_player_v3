@@ -55,13 +55,12 @@ function playTrack(index) {
     const currentTime = document.getElementById('current-time');
     const duration = document.getElementById('duration');
 
-    audioPlayer.src = `/music/${track.filename}`;
-    playerCover.src = track.cover ? `/static/covers/${track.cover}` : `/static/covers/default_cover.jpg`;
+    audioPlayer.src = `/music/${track.file_id}`;
+    playerCover.src = track.cover ? `/cover/${track.cover}` : `/static/covers/default_cover.jpg`;
     playerTitle.textContent = track.title;
     playerArtist.textContent = track.artist;
     audioPlayer.play();
 
-    // Aktualizacja aktywności
     activity.innerHTML = `
         <div class="playing">
             <div class="bar"></div>
@@ -90,7 +89,6 @@ function playTrack(index) {
         playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
     };
 
-    // Aktualizacja paska przewijania
     audioPlayer.onloadedmetadata = () => {
         seekSlider.max = audioPlayer.duration;
         duration.textContent = formatTime(audioPlayer.duration);
@@ -149,7 +147,7 @@ function shuffleArray(array) {
 function downloadPlaylist() {
     const playlistUrl = document.getElementById('playlist-url').value;
     const downloadMessage = document.getElementById('download-message');
-    downloadMessage.textContent = 'Downloading playlist...';
+    downloadMessage.textContent = 'Downloading playlist in background...';
     downloadMessage.style.display = 'block';
 
     fetch('/download_playlist', {
@@ -161,29 +159,28 @@ function downloadPlaylist() {
     })
     .then(response => response.json())
     .then(data => {
-        downloadMessage.textContent = data.message;
         if (data.status === 'success') {
-            fetch('/get_music')
-                .then(response => response.json())
-                .then(newTrackList => {
-                    trackList = newTrackList;
-                    shuffledIndices = shuffleArray([...Array(trackList.length).keys()]);
-                    renderTrackList();
-                });
+            downloadMessage.textContent = data.message;
+            downloadMessage.style.color = '#1db954';
+            // Odśwież listę utworów po kilku sekundach
+            setTimeout(() => {
+                fetch('/get_music')
+                    .then(response => response.json())
+                    .then(newTrackList => {
+                        trackList = newTrackList;
+                        shuffledIndices = shuffleArray([...Array(trackList.length).keys()]);
+                        renderTrackList();
+                    });
+            }, 5000);
+        } else {
+            downloadMessage.textContent = data.message;
+            downloadMessage.style.color = '#dc3545';
         }
     })
     .catch(error => {
         downloadMessage.textContent = 'Error downloading playlist: ' + error;
+        downloadMessage.style.color = '#dc3545';
     });
-}
-
-function downloadTrack(filename) {
-    const link = document.createElement('a');
-    link.href = `/download_track/${filename}`;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
 }
 
 function addFavorite(filename) {
@@ -198,17 +195,18 @@ function renderTrackList() {
     const trackListDiv = document.getElementById('track-list');
     trackListDiv.innerHTML = '';
     trackList.forEach((track, index) => {
+        const coverSrc = track.cover ? `/cover/${track.cover}` : `/static/covers/default_cover.jpg`;
+        console.log(`Rendering track: ${track.title}, Cover: ${coverSrc}`);
         const trackCard = `
             <div class="col-md-4 col-lg-3 mb-4 track-item" data-title="${track.title.toLowerCase()}" data-artist="${track.artist.toLowerCase()}">
                 <div class="card track-card">
-                    <img src="${track.cover ? `/static/covers/${track.cover}` : `/static/covers/default_cover.jpg`}" class="card-img-top rounded-top" alt="Album Cover">
+                    <img src="${coverSrc}" class="card-img-top rounded-top" alt="Album Cover" onerror="this.src='/static/covers/default_cover.jpg'">
                     <div class="card-body">
                         <h5 class="card-title text-light">${track.title}</h5>
                         <p class="card-text text-muted">${track.artist}</p>
                         <div class="d-flex justify-content-between flex-wrap">
                             <button class="btn btn-primary btn-sm me-1 mb-1" onclick="playTrack(${index})"><i class="fas fa-play me-1"></i>Play</button>
                             <button class="btn btn-success btn-sm me-1 mb-1" onclick="addFavorite('${track.filename}')"><i class="fas fa-heart me-1"></i>Add</button>
-                            <button class="btn btn-info btn-sm mb-1" onclick="downloadTrack('${track.filename}')"><i class="fas fa-download me-1"></i>Download</button>
                         </div>
                     </div>
                 </div>

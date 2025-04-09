@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: music-player-v3
+    env: python
+    plan: free
+    buildCommand: |
+      apt-get update && apt-get install -y ffmpeg
+      pip install -r requirements.txt
+    startCommand: "gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 60 app:app"
+    envVars:
+      - key: SPOTIPY_CLIENT_ID
+        sync: false
+      - key: SPOTIPY_CLIENT_SECRET
+        sync: false
+      - key: SERVICE_ACCOUNT_JSON
+        sync: false
