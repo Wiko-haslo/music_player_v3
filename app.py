@@ -6,6 +6,18 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from PIL import Image
 import requests
 from io import BytesIO
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+
+# Utwórz plik service-account.json z zmiennej środowiskowej
+SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
+if SERVICE_ACCOUNT_JSON:
+    with open("service-account.json", "w") as f:
+        f.write(SERVICE_ACCOUNT_JSON)
+else:
+    if not os.path.exists("service-account.json"):
+        raise FileNotFoundError("SERVICE_ACCOUNT_JSON not set and service-account.json not found")
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"  # Zmień na bezpieczny klucz w produkcji
