@@ -24,8 +24,8 @@ if not os.path.exists(DATA_FOLDER):
     os.makedirs(DATA_FOLDER)
 
 # Konfiguracja Spotify API
-SPOTIFY_CLIENT_ID = os.getenv("3df3f84da658417d84522a7a345c524b")
-SPOTIFY_CLIENT_SECRET = os.getenv("657f4e038bf94a718343256b7706e6e8")
+SPOTIFY_CLIENT_ID = os.getenv("SPOTIPY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET")
 sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET))
 
 # Funkcja do zapisu danych użytkownika
