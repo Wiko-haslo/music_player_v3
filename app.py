@@ -16,17 +16,23 @@ COVERS_FOLDER = "static/covers"
 DATA_FOLDER = "data"
 
 # Upewnij się, że foldery istnieją
-if not os.path.exists(MUSIC_FOLDER):
-    os.makedirs(MUSIC_FOLDER)
-if not os.path.exists(COVERS_FOLDER):
-    os.makedirs(COVERS_FOLDER)
-if not os.path.exists(DATA_FOLDER):
-    os.makedirs(DATA_FOLDER)
+for folder in [MUSIC_FOLDER, COVERS_FOLDER, DATA_FOLDER]:
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+        print(f"Created folder: {folder}")
 
 # Konfiguracja Spotify API
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIPY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET")
-sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET))
+print(f"SPOTIPY_CLIENT_ID: {SPOTIFY_CLIENT_ID}")  # Debug
+print(f"SPOTIPY_CLIENT_SECRET: {SPOTIFY_CLIENT_SECRET}")  # Debug
+
+# Inicjalizacja Spotipy
+try:
+    sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=SPOTIFY_CLIENT_ID, client_secret=SPOTIFY_CLIENT_SECRET))
+    print("Spotify API initialized successfully")
+except Exception as e:
+    print(f"Error initializing Spotify API: {str(e)}")
 
 # Funkcja do zapisu danych użytkownika
 def save_user(username, password):
@@ -54,12 +60,18 @@ def check_user(username, password):
 # Funkcja do pobierania okładki albumu
 def download_cover(url, filename):
     try:
+        print(f"Downloading cover from URL: {url}")  # Debug
         response = requests.get(url)
+        response.raise_for_status()  # Sprawdź, czy żądanie się powiodło
         img = Image.open(BytesIO(response.content))
         img = img.resize((300, 300))  # Zmiana rozmiaru okładki
-        img.save(os.path.join(COVERS_FOLDER, filename))
+        cover_path = os.path.join(COVERS_FOLDER, filename)
+        img.save(cover_path)
+        print(f"Successfully saved cover: {cover_path}")  # Debug
+        return filename
     except Exception as e:
-        print(f"Error downloading cover for {filename}: {str(e)}")
+        print(f"Error downloading cover for {filename}: {str(e)}")  # Debug
+        return None
 
 # Funkcja do pobierania playlisty Spotify w formacie .opus
 def download_playlist(playlist_url):
@@ -80,10 +92,11 @@ def download_playlist(playlist_url):
             print(f"Processing track: {filename}")  # Debug
 
             # Pobierz okładkę, jeśli istnieje
+            cover_filename = None
             if album_cover_url:
                 cover_filename = f"{artist_name} - {track_name}.jpg"
                 print(f"Downloading cover: {cover_filename}")  # Debug
-                download_cover(album_cover_url, cover_filename)
+                cover_filename = download_cover(album_cover_url, cover_filename)
             else:
                 print("No album cover available")  # Debug
 
@@ -120,7 +133,7 @@ def manage_favorite(username, filename, action):
     with open(favorites_file, "w") as f:
         json.dump(favorites, f)
 
-# Funkcja do wczytywania utworów (bez mutagen.opus)
+# Funkcja do wczytywania utworów
 def load_songs():
     songs = []
     print(f"Looking for songs in folder: {MUSIC_FOLDER}")  # Debug
@@ -140,15 +153,16 @@ def load_songs():
             # Sprawdź, czy istnieje okładka
             cover_filename = f"{base_name}.jpg"
             cover_path = cover_filename if os.path.exists(os.path.join(COVERS_FOLDER, cover_filename)) else None
+            print(f"Checking cover: {os.path.join(COVERS_FOLDER, cover_filename)} - Exists: {os.path.exists(os.path.join(COVERS_FOLDER, cover_filename))}")  # Debug
 
             songs.append({
                 "filename": filename,
                 "title": song_title,
                 "artist": artist,
-                "duration": 0,  # Pomijamy duration, bo nie używamy mutagen
-                "cover": cover_filename  # Zwracamy nazwę pliku okładki (bez ścieżki)
+                "duration": 0,  # Pomijamy duration
+                "cover": cover_path
             })
-            print(f"Loaded song: {filename}, Artist: {artist}, Title: {song_title}, Cover: {cover_filename}")  # Debug
+            print(f"Loaded song: {filename}, Artist: {artist}, Title: {song_title}, Cover: {cover_path}")  # Debug
     print(f"Total songs loaded: {len(songs)}")  # Debug
     return songs
 
@@ -221,9 +235,9 @@ def favorites():
                 "title": song_title,
                 "artist": artist,
                 "duration": 0,  # Pomijamy duration
-                "cover": cover_filename
+                "cover": cover_path
             })
-            print(f"Loaded favorite song: {filename}, Artist: {artist}, Title: {song_title}, Cover: {cover_filename}")  # Debug
+            print(f"Loaded favorite song: {filename}, Artist: {artist}, Title: {song_title}, Cover: {cover_path}")  # Debug
 
     print(f"Total favorite songs loaded: {len(songs)}")  # Debug
     return render_template("favorites.html", songs=songs)
@@ -274,7 +288,22 @@ def download_playlist_endpoint():
 # Endpoint do pobierania utworu
 @app.route("/download_track/<filename>")
 def download_track(filename):
-    return send_from_directory(MUSIC_FOLDER, filename, as_attachment=True)
+    try:
+        print(f"Serving download for: {filename}")  # Debug
+        return send_from_directory(MUSIC_FOLDER, filename, as_attachment=True)
+    except Exception as e:
+        print(f"Error serving download for {filename}: {str(e)}")  # Debug
+        return jsonify({"status": "error", "message": f"File {filename} not found"}), 404
+
+# Endpoint do serwowania plików muzycznych
+@app.route("/music/<filename>")
+def serve_music(filename):
+    try:
+        print(f"Serving music file: {filename}")  # Debug
+        return send_from_directory(MUSIC_FOLDER, filename)
+    except Exception as e:
+        print(f"Error serving music file {filename}: {str(e)}")  # Debug
+        return jsonify({"status": "error", "message": f"File {filename} not found"}), 404
 
 # Uruchom aplikację tylko lokalnie
 if __name__ == '__main__':
