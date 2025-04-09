@@ -3,9 +3,11 @@ services:
     name: music-player-v3
     env: python
     plan: free
+    runtime: image
+    image:
+      url: python:3.11
     buildCommand: |
-      apt-get update && apt-get install -y ffmpeg
-      pip install -r requirements.txt
+      apt-get update && apt-get install -y ffmpeg ncurses-bin && pip install -r requirements.txt
     startCommand: "gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 60 app:app"
     envVars:
       - key: SPOTIPY_CLIENT_ID
