@@ -3,13 +3,12 @@ services:
     name: music-player-v3
     env: python
     plan: free
-    runtime: image
-    image:
-      url: python:3.11
     buildCommand: |
-      apt-get update && apt-get install -y ffmpeg ncurses-bin && pip install -r requirements.txt
+      mkdir -p bin && curl -L https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz -o ffmpeg.tar.xz && tar -xJf ffmpeg.tar.xz && mv ffmpeg-master-latest-linux64-gpl/bin/ffmpeg bin/ && rm -rf ffmpeg.tar.xz ffmpeg-master-latest-linux64-gpl && curl -L http://ftp.us.debian.org/debian/pool/main/n/ncurses/ncurses-bin_6.4-4_amd64.deb -o ncurses-bin.deb && dpkg -x ncurses-bin.deb . && mv usr/bin/tput bin/ && rm -rf ncurses-bin.deb usr && pip install -r requirements.txt
     startCommand: "gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 60 app:app"
     envVars:
+      - key: PATH
+        value: /opt/render/project/src/bin:$PATH
       - key: SPOTIPY_CLIENT_ID
         sync: false
       - key: SPOTIPY_CLIENT_SECRET
