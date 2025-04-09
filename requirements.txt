@@ -5,3 +5,4 @@ Pillow==10.4.0
 requests==2.32.3
 gunicorn==23.0.0
 waitress==3.0.0
+spotdl==4.2.7
