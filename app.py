@@ -43,8 +43,8 @@ credentials = service_account.Credentials.from_service_account_file(
     SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 drive_service = build('drive', 'v3', credentials=credentials)
 
-# ID folderu na Google Drive (zastąp swoim ID folderu)
-GOOGLE_DRIVE_FOLDER_ID = '1xLshqBxIQeGFZoYp44h50HDV-3Hylg-_'  # Wstaw ID folderu MusicPlayerFiles
+# ID folderu na Google Drive
+GOOGLE_DRIVE_FOLDER_ID = '1xLshqBxIQeGFZoYp44h50HDV-3Hylg-_'  # ID folderu MusicPlayerFiles
 
 # Funkcja do przesyłania pliku na Google Drive z ponawianiem
 def upload_to_drive(file_path, file_name, folder_id, retries=3):
@@ -88,6 +88,55 @@ def upload_to_drive_from_buffer(buffer, file_name, folder_id, retries=3):
             else:
                 raise e
     raise Exception(f"Failed to upload {file_name} after {retries} retries")
+
+# Funkcja do zapisywania metadanych na Google Drive
+def save_song_metadata_to_drive(songs):
+    try:
+        # Zapisz metadane do tymczasowego pliku
+        temp_file = os.path.join(DATA_FOLDER, "songs_temp.json")
+        with open(temp_file, "w") as f:
+            json.dump(songs, f)
+        
+        # Prześlij plik na Google Drive
+        file_id = find_file_on_drive("songs.json", GOOGLE_DRIVE_FOLDER_ID)
+        if file_id:
+            # Aktualizuj istniejący plik
+            media = MediaFileUpload(temp_file, mimetype='application/json')
+            drive_service.files().update(
+                fileId=file_id,
+                media_body=media
+            ).execute()
+            print(f"Updated songs.json on Google Drive with ID: {file_id}")
+        else:
+            # Utwórz nowy plik
+            file_id = upload_to_drive(temp_file, "songs.json", GOOGLE_DRIVE_FOLDER_ID)
+            print(f"Created songs.json on Google Drive with ID: {file_id}")
+        return file_id
+    except Exception as e:
+        print(f"Error saving songs metadata to Google Drive: {str(e)}")
+        return None
+
+# Funkcja do wczytywania metadanych z Google Drive
+def load_song_metadata_from_drive():
+    try:
+        file_id = find_file_on_drive("songs.json", GOOGLE_DRIVE_FOLDER_ID)
+        if not file_id:
+            print("songs.json not found on Google Drive")
+            return []
+        
+        request = drive_service.files().get_media(fileId=file_id)
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+        fh.seek(0)
+        songs = json.load(fh)
+        print(f"Loaded songs metadata from Google Drive, {len(songs)} songs")
+        return songs
+    except Exception as e:
+        print(f"Error loading songs metadata from Google Drive: {str(e)}")
+        return []
 
 # Funkcja do wyszukiwania pliku na Google Drive
 def find_file_on_drive(filename, folder_id):
@@ -135,13 +184,7 @@ def check_user(username, password):
 
 # Funkcja do zapisywania metadanych piosenki
 def save_song_metadata(artist, title, song_file_id, cover_file_id):
-    songs_file = os.path.join(DATA_FOLDER, "songs.json")
-    try:
-        with open(songs_file, "r") as f:
-            songs = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        songs = []
-
+    songs = load_song_metadata_from_drive()
     songs.append({
         "artist": artist,
         "title": title,
@@ -149,9 +192,7 @@ def save_song_metadata(artist, title, song_file_id, cover_file_id):
         "song_file_id": song_file_id,
         "cover_file_id": cover_file_id
     })
-
-    with open(songs_file, "w") as f:
-        json.dump(songs, f)
+    save_song_metadata_to_drive(songs)
     print(f"Saved metadata for {artist} - {title}, Song ID: {song_file_id}, Cover ID: {cover_file_id}")
 
 # Funkcja do pobierania okładki albumu
@@ -159,7 +200,7 @@ def download_cover(url, filename):
     try:
         print(f"Starting download of cover from URL: {url}")
         # Krok 1: Pobierz obraz
-        response = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        response = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"})
         print(f"Response status code: {response.status_code}")
         response.raise_for_status()
         print(f"Cover downloaded successfully, size: {len(response.content)} bytes")
@@ -170,7 +211,7 @@ def download_cover(url, filename):
         img = img.resize((300, 300))
         print("Image resized to 300x300")
 
-        # Krok 3: Zapisz obraz do pamięci (zamiast na dysk)
+        # Krok 3: Zapisz obraz do pamięci
         img_buffer = io.BytesIO()
         img.save(img_buffer, "JPEG", quality=95)
         print(f"Image saved to memory buffer, size: {img_buffer.getbuffer().nbytes} bytes")
@@ -210,7 +251,7 @@ def download_playlist_async(playlist_url):
             # Pobierz okładkę, jeśli istnieje
             cover_file_id = None
             if album_cover_url:
-                cover_filename = f"{artist_name} - {track_name}.jpg"
+                cover_filename = f"{artist_name} - {track_name}.opus.jpg"
                 cover_file_id = download_cover(album_cover_url, cover_filename)
             else:
                 print("No album cover available")
@@ -256,12 +297,10 @@ def manage_favorite(username, filename, action):
 # Funkcja do wczytywania utworów
 def load_songs():
     songs = []
-    songs_file = os.path.join(DATA_FOLDER, "songs.json")
-    try:
-        with open(songs_file, "r") as f:
-            song_data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        print("No songs.json found, loading songs from Google Drive as fallback")
+    # Wczytaj metadane z Google Drive
+    song_data = load_song_metadata_from_drive()
+    if not song_data:
+        print("No songs metadata found on Google Drive, loading songs from Google Drive as fallback")
         # Fallback: Wczytaj piosenki z Google Drive, jeśli songs.json nie istnieje
         query = f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed = false"
         results = drive_service.files().list(q=query, fields="files(id, name)").execute()
@@ -273,7 +312,7 @@ def load_songs():
                 parts = base_name.split(" - ")
                 artist = parts[0] if len(parts) > 1 else "Unknown Artist"
                 song_title = parts[1] if len(parts) > 1 else base_name
-                cover_filename = f"{base_name}.jpg"
+                cover_filename = f"{base_name}.opus.jpg"
                 cover_file_id = find_file_on_drive(cover_filename, GOOGLE_DRIVE_FOLDER_ID)
                 songs.append({
                     "filename": filename,
@@ -352,7 +391,7 @@ def favorites():
             parts = base_name.split(" - ")
             artist = parts[0] if len(parts) > 1 else "Unknown Artist"
             song_title = parts[1] if len(parts) > 1 else base_name
-            cover_filename = f"{base_name}.jpg"
+            cover_filename = f"{base_name}.opus.jpg"
             cover_file_id = find_file_on_drive(cover_filename, GOOGLE_DRIVE_FOLDER_ID)
 
             songs.append({
