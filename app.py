@@ -67,6 +67,28 @@ def upload_to_drive(file_path, file_name, folder_id, retries=3):
                 raise e
     raise Exception(f"Failed to upload {file_name} after {retries} retries")
 
+# Funkcja do przesyłania pliku z bufora w pamięci na Google Drive
+def upload_to_drive_from_buffer(buffer, file_name, folder_id, retries=3):
+    for attempt in range(retries):
+        try:
+            buffer.seek(0)  # Upewnij się, że bufor jest na początku
+            file_metadata = {
+                'name': file_name,
+                'parents': [folder_id]
+            }
+            media = MediaFileUpload(buffer, mimetype='image/jpeg')
+            file = drive_service.files().create(
+                body=file_metadata, media_body=media, fields='id').execute()
+            print(f"Uploaded {file_name} to Google Drive with ID: {file.get('id')}")
+            return file.get('id')
+        except HttpError as e:
+            if e.resp.status in [429, 503]:
+                print(f"Rate limit exceeded, retrying {attempt + 1}/{retries}...")
+                time.sleep(2 ** attempt)
+            else:
+                raise e
+    raise Exception(f"Failed to upload {file_name} after {retries} retries")
+
 # Funkcja do wyszukiwania pliku na Google Drive
 def find_file_on_drive(filename, folder_id):
     escaped_filename = filename.replace("'", "\\'")
@@ -76,13 +98,17 @@ def find_file_on_drive(filename, folder_id):
     return files[0]['id'] if files else None
 
 # Konfiguracja Spotify API
-# Odczytaj zmienne środowiskowe
 SPOTIPY_CLIENT_ID = os.getenv("SPOTIPY_CLIENT_ID")
 SPOTIPY_CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET")
 SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
 
 if not all([SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET, SERVICE_ACCOUNT_JSON]):
     raise ValueError("Missing required environment variables: SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET, or SERVICE_ACCOUNT_JSON")
+
+sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
+    client_id=SPOTIPY_CLIENT_ID,
+    client_secret=SPOTIPY_CLIENT_SECRET
+))
 
 # Funkcja do zapisu danych użytkownika
 def save_user(username, password):
@@ -107,21 +133,61 @@ def check_user(username, password):
     except (FileNotFoundError, json.JSONDecodeError):
         return False
 
+# Funkcja do zapisywania metadanych piosenki
+def save_song_metadata(artist, title, song_file_id, cover_file_id):
+    songs_file = os.path.join(DATA_FOLDER, "songs.json")
+    try:
+        with open(songs_file, "r") as f:
+            songs = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        songs = []
+
+    songs.append({
+        "artist": artist,
+        "title": title,
+        "filename": f"{artist} - {title}.opus",
+        "song_file_id": song_file_id,
+        "cover_file_id": cover_file_id
+    })
+
+    with open(songs_file, "w") as f:
+        json.dump(songs, f)
+    print(f"Saved metadata for {artist} - {title}, Song ID: {song_file_id}, Cover ID: {cover_file_id}")
+
 # Funkcja do pobierania okładki albumu
 def download_cover(url, filename):
     try:
-        print(f"Downloading cover from URL: {url}")
-        response = requests.get(url, timeout=10)
+        print(f"Starting download of cover from URL: {url}")
+        # Krok 1: Pobierz obraz
+        response = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        print(f"Response status code: {response.status_code}")
         response.raise_for_status()
+        print(f"Cover downloaded successfully, size: {len(response.content)} bytes")
+
+        # Krok 2: Otwórz i przetwórz obraz
         img = Image.open(BytesIO(response.content))
+        print(f"Image opened successfully, format: {img.format}, size: {img.size}")
         img = img.resize((300, 300))
-        cover_path = os.path.join(COVERS_FOLDER, filename)
-        img.save(cover_path, "JPEG", quality=95)
-        # Prześlij na Google Drive
-        file_id = upload_to_drive(cover_path, filename, GOOGLE_DRIVE_FOLDER_ID)
+        print("Image resized to 300x300")
+
+        # Krok 3: Zapisz obraz do pamięci (zamiast na dysk)
+        img_buffer = io.BytesIO()
+        img.save(img_buffer, "JPEG", quality=95)
+        print(f"Image saved to memory buffer, size: {img_buffer.getbuffer().nbytes} bytes")
+
+        # Krok 4: Prześlij na Google Drive
+        print(f"Uploading cover to Google Drive: {filename}")
+        file_id = upload_to_drive_from_buffer(img_buffer, filename, GOOGLE_DRIVE_FOLDER_ID)
+        print(f"Cover uploaded to Google Drive with ID: {file_id}")
         return file_id
+    except requests.exceptions.RequestException as e:
+        print(f"Error downloading cover from URL {url}: {str(e)}")
+        return None
+    except IOError as e:
+        print(f"Error processing image for {filename}: {str(e)}")
+        return None
     except Exception as e:
-        print(f"Error downloading cover for {filename}: {str(e)}")
+        print(f"Unexpected error in download_cover for {filename}: {str(e)}")
         return None
 
 # Funkcja do pobierania playlisty w tle
@@ -156,7 +222,9 @@ def download_playlist_async(playlist_url):
             if result == 0:
                 print(f"Successfully downloaded: {filename}")
                 # Prześlij utwór na Google Drive
-                upload_to_drive(os.path.join(MUSIC_FOLDER, filename), filename, GOOGLE_DRIVE_FOLDER_ID)
+                song_file_id = upload_to_drive(os.path.join(MUSIC_FOLDER, filename), filename, GOOGLE_DRIVE_FOLDER_ID)
+                # Zapisz metadane piosenki
+                save_song_metadata(artist_name, track_name, song_file_id, cover_file_id)
             else:
                 print(f"Failed to download: {filename}, spotdl exit code: {result}")
                 flash(f"Failed to download {filename}", "error")
@@ -188,33 +256,45 @@ def manage_favorite(username, filename, action):
 # Funkcja do wczytywania utworów
 def load_songs():
     songs = []
-    print(f"Looking for songs in Google Drive folder: {GOOGLE_DRIVE_FOLDER_ID}")
-    query = f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed = false"
-    results = drive_service.files().list(q=query, fields="files(id, name)").execute()
-    files = results.get('files', [])
-
-    for file in files:
-        filename = file['name']
-        if filename.endswith(".opus"):
-            # Rozdziel nazwę pliku na artystę i tytuł
-            base_name = filename[:-5]
-            parts = base_name.split(" - ")
-            artist = parts[0] if len(parts) > 1 else "Unknown Artist"
-            song_title = parts[1] if len(parts) > 1 else base_name
-
-            # Sprawdź, czy istnieje okładka
-            cover_filename = f"{base_name}.jpg"
-            cover_file_id = find_file_on_drive(cover_filename, GOOGLE_DRIVE_FOLDER_ID)
-
+    songs_file = os.path.join(DATA_FOLDER, "songs.json")
+    try:
+        with open(songs_file, "r") as f:
+            song_data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        print("No songs.json found, loading songs from Google Drive as fallback")
+        # Fallback: Wczytaj piosenki z Google Drive, jeśli songs.json nie istnieje
+        query = f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed = false"
+        results = drive_service.files().list(q=query, fields="files(id, name)").execute()
+        files = results.get('files', [])
+        for file in files:
+            filename = file['name']
+            if filename.endswith(".opus"):
+                base_name = filename[:-5]
+                parts = base_name.split(" - ")
+                artist = parts[0] if len(parts) > 1 else "Unknown Artist"
+                song_title = parts[1] if len(parts) > 1 else base_name
+                cover_filename = f"{base_name}.jpg"
+                cover_file_id = find_file_on_drive(cover_filename, GOOGLE_DRIVE_FOLDER_ID)
+                songs.append({
+                    "filename": filename,
+                    "file_id": file['id'],
+                    "title": song_title,
+                    "artist": artist,
+                    "duration": 0,
+                    "cover": cover_file_id
+                })
+                print(f"Loaded song: {filename}, Artist: {artist}, Title: {song_title}, Cover ID: {cover_file_id}")
+    else:
+        for song in song_data:
             songs.append({
-                "filename": filename,
-                "file_id": file['id'],
-                "title": song_title,
-                "artist": artist,
+                "filename": song["filename"],
+                "file_id": song["song_file_id"],
+                "title": song["title"],
+                "artist": song["artist"],
                 "duration": 0,
-                "cover": cover_file_id
+                "cover": song["cover_file_id"]
             })
-            print(f"Loaded song: {filename}, Artist: {artist}, Title: {song_title}, Cover ID: {cover_file_id}")
+            print(f"Loaded song: {song['filename']}, Artist: {song['artist']}, Title: {song['title']}, Cover ID: {song['cover_file_id']}")
     print(f"Total songs loaded: {len(songs)}")
     return songs
 
@@ -352,6 +432,7 @@ def serve_music(file_id):
         print(f"Error serving music file {file_id}: {str(e)}")
         return jsonify({"status": "error", "message": f"File {file_id} not found"}), 404
 
+# Endpoint do serwowania okładek
 @app.route("/cover/<file_id>")
 def serve_cover(file_id):
     if not file_id or file_id == "None":
