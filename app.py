@@ -512,32 +512,5 @@ def serve_cover(file_id):
         print(f"Error serving cover file {file_id}: {str(e)}")
         return jsonify({"status": "error", "message": f"File {file_id} not found"}), 404
 
-# Endpoint do pobierania piosenek na urządzenie
-@app.route("/download/<file_id>")
-def download_music(file_id):
-    try:
-        request = drive_service.files().get_media(fileId=file_id)
-        fh = io.BytesIO()
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        while not done:
-            status, done = downloader.next_chunk()
-            print(f"Downloaded {int(status.progress() * 100)}%")
-
-        fh.seek(0)
-        # Pobierz nazwę pliku z Google Drive
-        file_metadata = drive_service.files().get(fileId=file_id, fields="name").execute()
-        filename = file_metadata.get("name", f"{file_id}.opus")
-        # Zakoduj nazwę pliku w nagłówku
-        encoded_filename = urllib.parse.quote(filename)
-        return Response(
-            fh,
-            mimetype="audio/ogg",
-            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
-        )
-    except Exception as e:
-        print(f"Error downloading music file {file_id}: {str(e)}")
-        return jsonify({"status": "error", "message": f"File {file_id} not found"}), 404
-
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=8080)
