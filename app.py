@@ -13,6 +13,7 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 from googleapiclient.errors import HttpError
 import time
 import threading
+import urllib.parse
 
 # Utwórz plik service-account.json z zmiennej środowiskowej
 SERVICE_ACCOUNT_JSON = os.getenv("SERVICE_ACCOUNT_JSON")
@@ -92,14 +93,17 @@ def upload_to_drive_from_buffer(buffer, file_name, folder_id, retries=3):
 # Funkcja do zapisywania metadanych na Google Drive
 def save_song_metadata_to_drive(songs):
     try:
+        print(f"Saving {len(songs)} songs to Google Drive")
         # Zapisz metadane do tymczasowego pliku
         temp_file = os.path.join(DATA_FOLDER, "songs_temp.json")
         with open(temp_file, "w") as f:
             json.dump(songs, f)
+        print(f"Temporary file created: {temp_file}")
         
         # Prześlij plik na Google Drive
         file_id = find_file_on_drive("songs.json", GOOGLE_DRIVE_FOLDER_ID)
         if file_id:
+            print(f"Found existing songs.json with ID: {file_id}, updating...")
             # Aktualizuj istniejący plik
             media = MediaFileUpload(temp_file, mimetype='application/json')
             drive_service.files().update(
@@ -108,6 +112,7 @@ def save_song_metadata_to_drive(songs):
             ).execute()
             print(f"Updated songs.json on Google Drive with ID: {file_id}")
         else:
+            print("No existing songs.json found, creating new file...")
             # Utwórz nowy plik
             file_id = upload_to_drive(temp_file, "songs.json", GOOGLE_DRIVE_FOLDER_ID)
             print(f"Created songs.json on Google Drive with ID: {file_id}")
@@ -124,12 +129,14 @@ def load_song_metadata_from_drive():
             print("songs.json not found on Google Drive")
             return []
         
+        print(f"Found songs.json with ID: {file_id}, downloading...")
         request = drive_service.files().get_media(fileId=file_id)
         fh = io.BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
         done = False
         while not done:
             status, done = downloader.next_chunk()
+            print(f"Downloaded songs.json: {int(status.progress() * 100)}%")
         fh.seek(0)
         songs = json.load(fh)
         print(f"Loaded songs metadata from Google Drive, {len(songs)} songs")
@@ -140,11 +147,18 @@ def load_song_metadata_from_drive():
 
 # Funkcja do wyszukiwania pliku na Google Drive
 def find_file_on_drive(filename, folder_id):
+    # Escapuj pojedyncze cudzysłowy w nazwie pliku
     escaped_filename = filename.replace("'", "\\'")
+    # Usuń znaki, które mogą powodować problemy w zapytaniu
+    escaped_filename = escaped_filename.replace('"', '').replace('(', '').replace(')', '')
     query = f"'{folder_id}' in parents and name = '{escaped_filename}' and trashed = false"
-    results = drive_service.files().list(q=query, fields="files(id, name)").execute()
-    files = results.get('files', [])
-    return files[0]['id'] if files else None
+    try:
+        results = drive_service.files().list(q=query, fields="files(id, name)").execute()
+        files = results.get('files', [])
+        return files[0]['id'] if files else None
+    except HttpError as e:
+        print(f"Error searching for file {filename} on Google Drive: {str(e)}")
+        return None
 
 # Konfiguracja Spotify API
 SPOTIPY_CLIENT_ID = os.getenv("SPOTIPY_CLIENT_ID")
@@ -462,10 +476,15 @@ def serve_music(file_id):
             print(f"Downloaded {int(status.progress() * 100)}%")
 
         fh.seek(0)
+        # Pobierz nazwę pliku z Google Drive
+        file_metadata = drive_service.files().get(fileId=file_id, fields="name").execute()
+        filename = file_metadata.get("name", f"{file_id}.opus")
+        # Zakoduj nazwę pliku w nagłówku
+        encoded_filename = urllib.parse.quote(filename)
         return Response(
             fh,
             mimetype="audio/ogg",
-            headers={"Content-Disposition": f"inline; filename={file_id}.opus"}
+            headers={"Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}"}
         )
     except Exception as e:
         print(f"Error serving music file {file_id}: {str(e)}")
@@ -482,13 +501,42 @@ def serve_cover(file_id):
         filename = file_metadata.get("name", "cover.jpg")
         request = drive_service.files().get_media(fileId=file_id)
         file_content = request.execute()
+        # Zakoduj nazwę pliku w nagłówku
+        encoded_filename = urllib.parse.quote(filename)
         return Response(
             file_content,
             mimetype="image/jpeg",
-            headers={"Content-Disposition": f"inline; filename={filename}"}
+            headers={"Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}"}
         )
     except Exception as e:
         print(f"Error serving cover file {file_id}: {str(e)}")
+        return jsonify({"status": "error", "message": f"File {file_id} not found"}), 404
+
+# Endpoint do pobierania piosenek na urządzenie
+@app.route("/download/<file_id>")
+def download_music(file_id):
+    try:
+        request = drive_service.files().get_media(fileId=file_id)
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+            print(f"Downloaded {int(status.progress() * 100)}%")
+
+        fh.seek(0)
+        # Pobierz nazwę pliku z Google Drive
+        file_metadata = drive_service.files().get(fileId=file_id, fields="name").execute()
+        filename = file_metadata.get("name", f"{file_id}.opus")
+        # Zakoduj nazwę pliku w nagłówku
+        encoded_filename = urllib.parse.quote(filename)
+        return Response(
+            fh,
+            mimetype="audio/ogg",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
+        )
+    except Exception as e:
+        print(f"Error downloading music file {file_id}: {str(e)}")
         return jsonify({"status": "error", "message": f"File {file_id} not found"}), 404
 
 if __name__ == '__main__':
