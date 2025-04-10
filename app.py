@@ -1,4 +1,5 @@
 import os
+import io
 import json
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
@@ -67,8 +68,9 @@ def upload_to_drive(file_path, file_name, folder_id, retries=3):
     raise Exception(f"Failed to upload {file_name} after {retries} retries")
 
 # Funkcja do wyszukiwania pliku na Google Drive
-def find_file_on_drive(file_name, folder_id):
-    query = f"'{folder_id}' in parents and name = '{file_name}' and trashed = false"
+def find_file_on_drive(filename, folder_id):
+    escaped_filename = filename.replace("'", "\\'")
+    query = f"'{folder_id}' in parents and name = '{escaped_filename}' and trashed = false"
     results = drive_service.files().list(q=query, fields="files(id, name)").execute()
     files = results.get('files', [])
     return files[0]['id'] if files else None
@@ -350,23 +352,20 @@ def serve_music(file_id):
         print(f"Error serving music file {file_id}: {str(e)}")
         return jsonify({"status": "error", "message": f"File {file_id} not found"}), 404
 
-# Endpoint do serwowania okładek (ze strumieniowaniem)
 @app.route("/cover/<file_id>")
 def serve_cover(file_id):
-    try:
-        request = drive_service.files().get_media(fileId=file_id)
-        fh = io.BytesIO()
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        while not done:
-            status, done = downloader.next_chunk()
-            print(f"Downloaded {int(status.progress() * 100)}%")
+    if not file_id or file_id == "None":
+        return jsonify({"status": "error", "message": "No cover file ID provided"}), 404
 
-        fh.seek(0)
+    try:
+        file_metadata = drive_service.files().get(fileId=file_id, fields="name").execute()
+        filename = file_metadata.get("name", "cover.jpg")
+        request = drive_service.files().get_media(fileId=file_id)
+        file_content = request.execute()
         return Response(
-            fh,
+            file_content,
             mimetype="image/jpeg",
-            headers={"Content-Disposition": f"inline; filename={file_id}.jpg"}
+            headers={"Content-Disposition": f"inline; filename={filename}"}
         )
     except Exception as e:
         print(f"Error serving cover file {file_id}: {str(e)}")
